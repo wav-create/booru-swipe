@@ -208,7 +208,23 @@ export default {
     const data = await getJson(`${BASE}/tags.json?${params}`, settings.proxyUrl);
     return (Array.isArray(data) ? data : []).map((t) => ({ name: t.name, count: t.post_count }));
   },
-
+  // "Discovery": videos with ALL of the given tags that are NOT in this user's favorites
+  async fetchDiscover({ tags, excludeUser, search, limit, settings }) {
+    const params = baseParams(settings);
+    params.set('tags', buildQuery({
+      ...search,
+      tags: `${tags.join(' ')} -fav:${excludeUser}`,
+      sort: 'random',
+      seed: Math.floor(Math.random() * 1e9),
+    }));
+    params.set('limit', String(limit));
+    params.set('page', '1');
+    const data = await getJson(`${BASE}/posts.json?${params}`, settings.proxyUrl);
+    const raw = Array.isArray(data) ? data : (data.posts || []);
+    return raw
+      .filter((p) => p.file && p.file.url && ['webm', 'mp4'].includes(p.file.ext) && !(p.flags && p.flags.deleted))
+      .map(normalize);
+  },
   // Optional: add to your site account's favorites
   async favorite(post, settings) {
     if (!settings.username || !settings.apiKey) return;
