@@ -211,7 +211,9 @@ $('btn-loop').addEventListener('click', () => {
   saveSettings(); updateAudioUI(); syncSettingsForm();
   toast(settings.loop ? 'Videos will loop' : 'Videos will move to the next one');
 });
-
+$('btn-hideui').addEventListener('click', () => {
+  document.body.classList.toggle('ui-hidden');
+});
 const seek = $('seek');
 seek.addEventListener('pointerdown', () => feed.setScrubbing(true));
 ['pointerup', 'pointercancel', 'change'].forEach((ev) => seek.addEventListener(ev, () => feed.setScrubbing(false)));
