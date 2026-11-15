@@ -161,3 +161,10 @@ code { background: var(--card); padding: 1px 5px; border-radius: 5px; }
 .hideui { position: absolute; left: calc(var(--sl) + 10px); bottom: calc(var(--sb) + 170px); width: 44px; height: 44px; font-size: 20px; }
 body.ui-hidden .hideui { opacity: .35; }
 body.ui-hidden .topbar, body.ui-hidden .side, body.ui-hidden .bottom, body.ui-hidden .sound-hint { visibility: hidden; }
+/* Phone held sideways: put the side buttons in a row so they don't crowd the top bar */
+@media (orientation: landscape) and (max-height: 520px) {
+  .side { flex-direction: row; bottom: calc(var(--sb) + 135px); gap: 8px; }
+  .icon-btn.big { width: 46px; height: 46px; font-size: 22px; }
+  .hideui { bottom: calc(var(--sb) + 135px); }
+  .bottom { padding-top: 24px; }
+}
