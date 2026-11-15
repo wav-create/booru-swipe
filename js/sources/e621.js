@@ -49,7 +49,7 @@ function ratingTokens(r) {
 }
 
 // Turns everything the user chose into the site's tag string.
-function buildQuery({ tags, blacklist, ratings, sort, seed }) {
+function buildQuery({ tags, blacklist, ratings, sort, seed, minScore }) {
   const user = String(tags || '').trim().split(/\s+/).filter(Boolean);
   const has = (re) => user.some((t) => re.test(t));
   const fixed = [];
