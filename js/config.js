@@ -9,6 +9,7 @@ export const DEFAULT_SETTINGS = {
   query: '',
   sort: 'random',
   ratings: { s: true, q: false, e: false },   // SAFE ONLY on first launch
+  minScore: 0,          // hide posts scoring below this (0 = off)
   blacklist: '',
   creditsTags: DEFAULT_CREDITS_TAGS.join(' '),
   creditsRuleOn: true,
