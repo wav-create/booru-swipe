@@ -58,6 +58,7 @@ function startSearch() {
   state.exhausted = false;
   state.loading = false;
   state.blockedUntil = 0;
+  minScore: settings.minScore },
   feed.clear();
   updateQueryLabel();
   showStatus('Loading videos…', { spinner: true });
@@ -75,14 +76,15 @@ async function loadMore() {
     for (let tries = 0; added === 0 && !state.exhausted && tries < 4; tries++) {
       const res = await src().fetchPage({
         search: { tags: settings.query, blacklist: settings.blacklist, ratings: settings.ratings,
-                  sort: settings.sort, seed: state.seed },
+                  sort: settings.sort, seed: state.seed, minScore: settings.minScore},
         page: state.page,
         settings,
       });
       if (gen !== state.gen) return;                 // a newer search started
       state.page++;
       if (!res.hasMore) state.exhausted = true;
-      const fresh = res.posts.filter((p) => !state.seen.has(postKey(p)) && !matchesBlacklist(p, blacklist));
+      const fresh = res.posts.filter((p) => !state.seen.has(postKey(p)) && !matchesBlacklist(p, blacklist)
+      && (p.score ?? 0) >= (settings.minScore || 0));
       fresh.forEach((p) => state.seen.add(postKey(p)));  // never show the same video twice
       if (fresh.length) { feed.add(fresh); added += fresh.length; hideStatus(); }
     }
@@ -135,7 +137,8 @@ function playList(label, posts, index) {
 
 function updateQueryLabel() {
   const sort = (src().sorts.find((s) => s.id === settings.sort) || {}).label || '';
-  $('query-label').textContent = (settings.query || 'all videos') + ' · ' + sort;
+  const min = settings.minScore > 0 ? ` · ${settings.minScore}+` : '';
+  $('query-label').textContent = (settings.query || 'all videos') + ' · ' + sort + min;
 }
 
 // ---------------------------------------------------------------- status + toast
@@ -256,12 +259,15 @@ function fillSearchForm() {
   $('rate-s').checked = settings.ratings.s;
   $('rate-q').checked = settings.ratings.q;
   $('rate-e').checked = settings.ratings.e;
+  $('search-minscore').value = settings.minScore > 0 ? settings.minScore : '';
 }
 function readSearchForm() {
   settings.query = $('search-input').value.trim();
   settings.sort = $('search-sort').value;
   settings.ratings = { s: $('rate-s').checked, q: $('rate-q').checked, e: $('rate-e').checked };
   if (!settings.ratings.s && !settings.ratings.q && !settings.ratings.e) settings.ratings.s = true;
+  settings.minScore = Math.max(0, parseInt($('search-minscore').value, 10) || 0);
+  saveSettings();
   saveSettings();
 }
 $('rate-e').addEventListener('change', (e) => {
@@ -286,7 +292,7 @@ $('preset-save').addEventListener('click', () => {
   readSearchForm();
   const name = (prompt('Name for this saved search:', settings.query || 'My search') || '').trim();
   if (!name) return;
-  addPreset({ name, query: settings.query, sort: settings.sort, ratings: { ...settings.ratings } });
+  addPreset({ name, query: settings.query, sort: settings.sort, ratings: { ...settings.ratings }, minScore: settings.minScore });
   renderPresets();
 });
 $('preset-list').addEventListener('click', (e) => {
@@ -296,7 +302,8 @@ $('preset-list').addEventListener('click', (e) => {
   if (b.dataset.del !== undefined) { deletePreset(ps[Number(b.dataset.del)].name); renderPresets(); }
   else if (b.dataset.apply !== undefined) {
     const p = ps[Number(b.dataset.apply)];
-    settings.query = p.query; settings.sort = p.sort; settings.ratings = { ...p.ratings };
+      settings.query = p.query; settings.sort = p.sort; settings.ratings = { ...p.ratings };
+    settings.minScore = p.minScore || 0;
     saveSettings(); closePanel(); startSearch();
   }
 });
