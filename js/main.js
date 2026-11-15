@@ -7,6 +7,7 @@ import {
 import { SOURCES } from './sources/index.js';
 import { Feed } from './feed.js';
 import { $, esc, parseList, parseBlacklist, matchesBlacklist, formatTime } from './util.js';
+import { DISCOVER_IGNORE_TAGS } from './config.js';
 
 const src = () => SOURCES[settings.source] || SOURCES.e621;
 
@@ -34,7 +35,8 @@ function onCurrentChange(post) {
   $('info-artist').textContent = post.artists && post.artists.length
     ? post.artists.slice(0, 2).join(', ') : 'unknown artist';
   const site = (SOURCES[post.source] || {}).name || post.source;
-  $('info-meta').textContent = `▲ ${post.score ?? 0} · ${String(post.rating).toUpperCase()} · ${site}`;
+   $('info-meta').textContent = `▲ ${post.score ?? 0} · ${String(post.rating).toUpperCase()} · ${site}`
+    + (post.discovered ? ` · ✨ ${post.discoveredVia}` : '');
   $('btn-open').href = post.postUrl;
   updateFavButton(post);
   clearTimeout(histTimer);                           // only count it if you stay 1.5s
@@ -58,10 +60,95 @@ function startSearch() {
   state.exhausted = false;
   state.loading = false;
   state.blockedUntil = 0;
+  profile.counts.clear(); profile.n = 0;
   feed.clear();
   updateQueryLabel();
   showStatus('Loading videos…', { spinner: true });
   loadMore();
+}
+
+// ---------------------------------------------------------------- discovery ("more like my favorites")
+const profile = { counts: new Map(), n: 0 };   // how often each tag shows up in your favorites
+const IGNORE = new Set(DISCOVER_IGNORE_TAGS);
+
+function favUserFromQuery() {
+  const m = /(?:^|\s)fav:(\S+)/i.exec(settings.query || '');
+  return m ? m[1] : null;
+}
+
+function learnFrom(posts) {
+  for (const p of posts) {
+    profile.n++;
+    for (const group of ['artist', 'copyright', 'character', 'species', 'general']) {
+      for (const t of (p.tagGroups && p.tagGroups[group]) || []) {
+        if (!IGNORE.has(t)) profile.counts.set(t, (profile.counts.get(t) || 0) + 1);
+      }
+    }
+  }
+}
+
+// Picks tags at random; tags that appear more in your favorites are picked more often.
+function pickTaste(howMany) {
+  const minCount = Math.max(2, Math.floor(profile.n * 0.08));   // must appear in ~8% of favorites
+  const pool = [...profile.counts].filter(([, c]) => c >= minCount);
+  const picked = [];
+  while (picked.length < howMany && pool.length) {
+    const total = pool.reduce((s, [, c]) => s + c, 0);
+    let r = Math.random() * total;
+    let idx = 0;
+    for (; idx < pool.length - 1; idx++) { r -= pool[idx][1]; if (r <= 0) break; }
+    picked.push(pool[idx][0]);
+    pool.splice(idx, 1);
+  }
+  return picked;
+}
+
+function acceptable(p, blacklist) {
+  return !state.seen.has(postKey(p)) && !matchesBlacklist(p, blacklist)
+    && (p.score ?? 0) >= (settings.minScore || 0)
+    && !(settings.rememberSeen && hasSeen(p));   // remove this line if you skipped the "never show watched" change
+}
+
+async function fetchDiscovery(want, user, blacklist, gen) {
+  const out = [];
+  for (let attempt = 0; attempt < 2 && out.length < want; attempt++) {
+    const tags = pickTaste(2);          // 1 = broader results, 3 = narrower
+    if (tags.length < 2) break;         // not enough favorites loaded to learn from yet
+    try {
+      const posts = await src().fetchDiscover({
+        tags, excludeUser: user, limit: Math.min(40, want * 3 + 5), settings,
+        search: { blacklist: settings.blacklist, ratings: settings.ratings, minScore: settings.minScore },
+      });
+      if (gen !== state.gen) return [];
+      for (const p of posts) {
+        if (out.length >= want) break;
+        if (!acceptable(p, blacklist)) continue;
+        p.discovered = true;
+        p.discoveredVia = tags.join(' + ');
+        state.seen.add(postKey(p));
+        out.push(p);
+      }
+    } catch (e) { console.warn('Discovery failed:', e); break; }   // never break the normal feed
+  }
+  return out;
+}
+
+// Slots discovery videos in between your favorites
+async function addDiscovery(favs, blacklist, gen) {
+  const user = favUserFromQuery();
+  if (!settings.discover || !user || !src().fetchDiscover || !favs.length) return favs;
+  learnFrom(favs);
+  const pct = Math.min(60, Math.max(5, settings.discoverPercent || 25));
+  const want = Math.max(1, Math.round((favs.length * pct) / (100 - pct)));
+  const found = await fetchDiscovery(want, user, blacklist, gen);
+  const every = Math.max(1, Math.round((100 - pct) / pct));   // one discovery after every N favorites
+  const out = [];
+  let d = 0;
+  favs.forEach((p, i) => {
+    out.push(p);
+    if (d < found.length && (i + 1) % every === 0) out.push(found[d++]);
+  });
+  return out.concat(found.slice(d));
 }
 
 async function loadMore() {
@@ -75,17 +162,22 @@ async function loadMore() {
     for (let tries = 0; added === 0 && !state.exhausted && tries < 4; tries++) {
       const res = await src().fetchPage({
         search: { tags: settings.query, blacklist: settings.blacklist, ratings: settings.ratings,
-                  sort: settings.sort, seed: state.seed, minScore: settings.minScore},
+                  sort: settings.sort, seed: state.seed, minScore: settings.minScore },
         page: state.page,
         settings,
       });
       if (gen !== state.gen) return;                 // a newer search started
       state.page++;
       if (!res.hasMore) state.exhausted = true;
-      const fresh = res.posts.filter((p) => !state.seen.has(postKey(p)) && !matchesBlacklist(p, blacklist)
-      && (p.score ?? 0) >= (settings.minScore || 0));
+      const fresh = res.posts.filter((p) => acceptable(p, blacklist));
       fresh.forEach((p) => state.seen.add(postKey(p)));  // never show the same video twice
-      if (fresh.length) { feed.add(fresh); added += fresh.length; hideStatus(); }
+      if (fresh.length) {
+        const mixed = await addDiscovery(fresh, blacklist, gen);
+        if (gen !== state.gen) return;
+        feed.add(mixed);
+        added += mixed.length;
+        hideStatus();
+      }
     }
     if (gen === state.gen && feed.count() === 0) {
       showStatus('No videos found. Try different tags, or allow more content ratings.', { edit: true });
@@ -96,7 +188,6 @@ async function loadMore() {
     if (gen === state.gen) state.loading = false;
   }
 }
-
 function handleError(err, gen) {
   if (gen !== state.gen) return;
   if (err.kind === 'end') {
@@ -350,6 +441,8 @@ bind('set-source', 'source');
 bind('set-loop', 'loop', 'checkbox');
 bind('set-speed', 'speed', 'number');
 bind('set-datasaver', 'dataSaver', 'checkbox');
+bind('set-discover', 'discover', 'checkbox');
+bind('set-discover-pct', 'discoverPercent', 'number');
 bind('set-credits-on', 'creditsRuleOn', 'checkbox');
 bind('set-credits', 'creditsTags');
 bind('set-blacklist', 'blacklist');
