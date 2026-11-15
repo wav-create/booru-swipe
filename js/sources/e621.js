@@ -60,6 +60,9 @@ function buildQuery({ tags, blacklist, ratings, sort, seed, minScore }) {
   else fixed.push('~type:webm', '~type:mp4');
 
   if (!has(/^-?rating:/)) fixed.push(...ratingTokens(ratings));
+    // Minimum score. ">" means "greater than", so for whole numbers ">2999" means "3000 or more".
+  // (If you type your own score: tag in the search box, yours wins.)
+  if (minScore > 0 && !has(/^-?score:/)) fixed.push('score:>' + (minScore - 1));
 
   let wantsRandom;
   if (has(/^-?order:/)) {
