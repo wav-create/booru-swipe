@@ -1,1 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <!-- Don't tell the video servers which page we came from -->
+  <meta name="referrer" content="no-referrer">
+  <title>BooruSwipe</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- The swipe feed: JavaScript fills this with one <section> per video -->
+  <main id="feed" class="feed"></main>
 
+  <!-- Buttons and info floating on top of the feed -->
+  <div id="hud">
+    <header class="topbar">
+      <button id="btn-search" class="icon-btn" aria-label="Search">🔍</button>
+      <div id="query-label" class="query-label"></div>
+      <button id="btn-favs" class="icon-btn" aria-label="Favorites">♥</button>
+      <button id="btn-history" class="icon-btn" aria-label="History">🕘</button>
+      <button id="btn-settings" class="icon-btn" aria-label="Settings">⚙️</button>
+    </header>
+
+    <aside class="side">
+      <button id="btn-fav" class="icon-btn big" aria-label="Favorite">♡</button>
+      <button id="btn-tags" class="icon-btn big" aria-label="Show tags">🏷️</button>
+      <a id="btn-open" class="icon-btn big" target="_blank" rel="noopener" aria-label="Open original post">↗</a>
+    </aside>
+
+    <footer class="bottom">
+      <div class="info"><span id="info-artist"></span> <span id="info-meta"></span></div>
+      <div class="seek-row">
+        <span id="time-cur">0:00</span>
+        <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek">
+        <span id="time-dur">0:00</span>
+      </div>
+      <div class="ctrl-row">
+        <button id="btn-mute" class="pill" aria-label="Mute">🔊</button>
+        <input id="volume" type="range" min="0" max="1" step="0.05" aria-label="Volume">
+        <button id="btn-speed" class="pill" aria-label="Playback speed">1×</button>
+        <button id="btn-loop" class="pill" aria-label="Loop or auto-next">⏭ Next</button>
+      </div>
+    </footer>
+
+    <div id="sound-hint" class="sound-hint">Tap the screen once to enable sound</div>
+  </div>
+
+  <!-- Big loading / error / empty message -->
+  <div id="status" class="status" hidden>
+    <div class="spinner" id="status-spinner"></div>
+    <p id="status-text"></p>
+    <div class="status-actions">
+      <button id="status-retry" class="btn primary">Try again</button>
+      <button id="status-edit" class="btn">Edit search</button>
+    </div>
+  </div>
+  <div id="toast" class="toast" hidden></div>
+
+  <!-- ===== Search panel ===== -->
+  <section id="panel-search" class="panel" hidden>
+    <div class="panel-head"><h2>Search</h2><button class="btn" data-close>✕</button></div>
+    <label for="search-input">Tags</label>
+    <input id="search-input" type="text" autocapitalize="off" autocomplete="off" autocorrect="off"
+           spellcheck="false" enterkeyhint="search" placeholder="e.g. fox -comic score:>50">
+    <p class="muted">Space-separated tags, like on the site. Put <code>-</code> in front to exclude a tag.
+      You can use things like <code>order:score</code> yourself. "Videos only" is added automatically.</p>
+    <label for="search-sort">Sort</label>
+    <select id="search-sort"></select>
+    <label>Content rating</label>
+    <div>
+      <label class="check"><input type="checkbox" id="rate-s"> Safe</label>
+      <label class="check"><input type="checkbox" id="rate-q"> Questionable</label>
+      <label class="check"><input type="checkbox" id="rate-e"> Explicit</label>
+    </div>
+    <div class="row">
+      <button id="search-go" class="btn primary">Search</button>
+      <button id="preset-save" class="btn">Save as preset</button>
+    </div>
+    <h3>Saved searches</h3>
+    <div id="preset-list" class="chips"></div>
+  </section>
+
+  <!-- ===== Settings panel ===== -->
+  <section id="panel-settings" class="panel" hidden>
+    <div class="panel-head"><h2>Settings</h2><button class="btn" data-close>✕</button></div>
+
+    <h3>Playback</h3>
+    <label class="check"><input type="checkbox" id="set-loop"> Loop each video (instead of moving to the next)</label>
+    <label for="set-speed">Playback speed</label>
+    <select id="set-speed">
+      <option value="0.5">0.5×</option><option value="0.75">0.75×</option><option value="1">1×</option>
+      <option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option>
+    </select>
+    <label class="check"><input type="checkbox" id="set-datasaver"> Data saver (smaller video versions when the site offers them)</label>
+
+    <h3>Credits / end-card rule</h3>
+    <label class="check"><input type="checkbox" id="set-credits-on"> End videos early when they have one of these tags</label>
+    <textarea id="set-credits" spellcheck="false" autocapitalize="off"></textarea>
+    <p class="muted">Separate with spaces. <code>*</code> is a wildcard (e.g. <code>*credit*</code>).
+      Not sure what the tags are really called? Look them up:</p>
+    <div class="row">
+      <input id="tagfind-q" type="text" autocapitalize="off" autocomplete="off" placeholder="word to look up, e.g. credit" style="flex:1">
+      <button id="tagfind-go" class="btn">Find</button>
+    </div>
+    <div id="tagfind-results" class="chips"></div>
+
+    <h3>Blacklist</h3>
+    <textarea id="set-blacklist" spellcheck="false" autocapitalize="off"
+      placeholder="One entry per line, e.g.&#10;some_tag&#10;tag_a tag_b"></textarea>
+    <p class="muted">One entry per line. Several tags on one line means "hide only posts that have all of them".</p>
+
+    <h3>Site</h3>
+    <label for="set-source">Source</label>
+    <select id="set-source"></select>
+    <label for="set-user">Your username on the site</label>
+    <input id="set-user" type="text" autocapitalize="off" autocomplete="off" placeholder="goes into the User-Agent so admins can contact you">
+    <label for="set-key">API key (optional)</label>
+    <input id="set-key" type="password" autocomplete="off" placeholder="stored only in this browser">
+    <label class="check"><input type="checkbox" id="set-sync"> Also add favorites to my site account (needs username + API key)</label>
+    <label for="set-proxy">Proxy URL (only if direct requests fail)</label>
+    <input id="set-proxy" type="url" autocapitalize="off" autocomplete="off" placeholder="https://something.workers.dev/">
+
+    <h3>Data</h3>
+    <div class="row">
+      <button id="btn-clear-history" class="btn">Clear history</button>
+      <button id="btn-reset" class="btn">Reset settings</button>
+    </div>
+  </section>
+
+  <!-- ===== Favorites panel ===== -->
+  <section id="panel-favs" class="panel" hidden>
+    <div class="panel-head"><h2>Favorites</h2><button class="btn" data-close>✕</button></div>
+    <p id="fav-label" class="muted"></p>
+    <div id="fav-grid" class="grid"></div>
+  </section>
+
+  <!-- ===== History panel ===== -->
+  <section id="panel-history" class="panel" hidden>
+    <div class="panel-head"><h2>History</h2><button class="btn" data-close>✕</button></div>
+    <div id="history-list"></div>
+  </section>
+
+  <!-- ===== Tags panel ===== -->
+  <section id="panel-tags" class="panel" hidden>
+    <div class="panel-head"><h2>Tags</h2><button class="btn" data-close>✕</button></div>
+    <p class="muted">Tap a tag to search for it.</p>
+    <div id="tags-body"></div>
+  </section>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
