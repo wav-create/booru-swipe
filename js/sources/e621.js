@@ -13,13 +13,13 @@ const NOT_REALLY_ARTISTS = new Set([
 ]);
 
 const SORTS = [
-  { id: 'random', label: 'Random',          tag: 'order:random' },
-  { id: 'scatter', label: 'Random (spread out)', tag: 'order:id_desc' },
-  { id: 'new',    label: 'Newest',          tag: 'order:id_desc' },
-  { id: 'score',  label: 'Highest score',   tag: 'order:score' },
-  { id: 'favs',   label: 'Most favorited',  tag: 'order:favcount' },
-  { id: 'hot',    label: 'Hot',             tag: 'order:hot' },
-  { id: 'long',   label: 'Longest videos',  tag: 'order:duration' },
+  { id: 'random',  label: 'Random',               tag: 'order:random' },
+  { id: 'scatter', label: 'Random (spread out)',  tag: 'order:id_desc' },
+  { id: 'new',     label: 'Newest',               tag: 'order:id_desc' },
+  { id: 'score',   label: 'Highest score',        tag: 'order:score' },
+  { id: 'favs',    label: 'Most favorited',       tag: 'order:favcount' },
+  { id: 'hot',     label: 'Hot',                  tag: 'order:hot' },
+  { id: 'long',    label: 'Longest videos',       tag: 'order:duration' },
 ];
 
 // The docs ask for a descriptive User-Agent. Browsers won't let us set one,
@@ -61,10 +61,12 @@ function buildQuery({ tags, blacklist, ratings, sort, seed, minScore, idBefore }
   else fixed.push('~type:webm', '~type:mp4');
 
   if (!has(/^-?rating:/)) fixed.push(...ratingTokens(ratings));
-    // Minimum score. ">" means "greater than", so for whole numbers ">2999" means "3000 or more".
+
+  // Minimum score. ">" means "greater than", so for whole numbers ">2999" means "3000 or more".
   // (If you type your own score: tag in the search box, yours wins.)
   if (minScore > 0 && !has(/^-?score:/)) fixed.push('score:>' + (minScore - 1));
-    // Used by "spread out" random: only look at posts with an id lower than this number
+
+  // Used by "spread out" random: only look at posts with an id lower than this number
   if (idBefore && !has(/^-?id:/)) fixed.push('id:<' + idBefore);
 
   let wantsRandom;
@@ -72,7 +74,6 @@ function buildQuery({ tags, blacklist, ratings, sort, seed, minScore, idBefore }
     wantsRandom = has(/^order:random$/);
   } else {
     const s = SORTS.find((x) => x.id === sort) || SORTS[0];
-
     fixed.push(s.tag);
     wantsRandom = s.id === 'random';
   }
@@ -135,6 +136,7 @@ function normalize(p) {
     postUrl: `${BASE}/posts/${p.id}`,
   };
 }
+
 // Keeps only real, playable videos and converts them to the app's format
 function toVideoPosts(raw) {
   return raw
@@ -162,7 +164,7 @@ async function getNewestId(settings) {
 async function scatterPage(search, settings) {
   const DRAWS = 3, PER_DRAW = 10;
   const top = await getNewestId(settings);
-  if (!top) throw new ApiError('http', 'Could not work out where the site\'s newest post is');
+  if (!top) throw new ApiError('http', "Could not work out where the site's newest post is");
   const byId = new Map();
   for (let d = 0; d < DRAWS; d++) {
     const before = 1 + Math.floor(Math.random() * top);
@@ -180,6 +182,7 @@ async function scatterPage(search, settings) {
   }
   return { posts, hasMore: true };   // there is always another random jump to make
 }
+
 export default {
   id: 'e621',
   name: 'e621',
