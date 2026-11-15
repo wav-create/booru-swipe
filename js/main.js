@@ -211,8 +211,30 @@ $('btn-loop').addEventListener('click', () => {
   saveSettings(); updateAudioUI(); syncSettingsForm();
   toast(settings.loop ? 'Videos will loop' : 'Videos will move to the next one');
 });
+// ----- Fullscreen + hide controls -----
+function inFullscreen() { return !!document.fullscreenElement; }
+function toggleFullscreen(want) {
+  if (want === undefined) want = !inFullscreen();
+  if (want && !inFullscreen()) {
+    const el = document.documentElement;
+    if (el.requestFullscreen) {
+      el.requestFullscreen({ navigationUI: 'hide' }).catch(() => toast('This browser would not go fullscreen'));
+    } else {
+      toast('Fullscreen is not supported in this browser');
+    }
+  } else if (!want && inFullscreen()) {
+    document.exitFullscreen().catch(() => {});
+  }
+}
+// Keeps the ⛶ button's color in sync, even if you leave fullscreen with the Back gesture
+document.addEventListener('fullscreenchange', () => {
+  $('btn-full').classList.toggle('on', inFullscreen());
+});
+$('btn-full').addEventListener('click', () => toggleFullscreen());
 $('btn-hideui').addEventListener('click', () => {
-  document.body.classList.toggle('ui-hidden');
+  const hide = !document.body.classList.contains('ui-hidden');
+  document.body.classList.toggle('ui-hidden', hide);
+  toggleFullscreen(hide);   // delete this line if you want 👁 to hide the controls only
 });
 const seek = $('seek');
 seek.addEventListener('pointerdown', () => feed.setScrubbing(true));
