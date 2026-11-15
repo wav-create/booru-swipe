@@ -49,7 +49,7 @@ function ratingTokens(r) {
 }
 
 // Turns everything the user chose into the site's tag string.
-function buildQuery({ tags, blacklist, ratings, sort, seed, minScore }) {
+function buildQuery({ tags, blacklist, ratings, sort, seed, minScore, idBefore }) {
   const user = String(tags || '').trim().split(/\s+/).filter(Boolean);
   const has = (re) => user.some((t) => re.test(t));
   const fixed = [];
@@ -63,12 +63,15 @@ function buildQuery({ tags, blacklist, ratings, sort, seed, minScore }) {
     // Minimum score. ">" means "greater than", so for whole numbers ">2999" means "3000 or more".
   // (If you type your own score: tag in the search box, yours wins.)
   if (minScore > 0 && !has(/^-?score:/)) fixed.push('score:>' + (minScore - 1));
+    // Used by "spread out" random: only look at posts with an id lower than this number
+  if (idBefore && !has(/^-?id:/)) fixed.push('id:<' + idBefore);
 
   let wantsRandom;
   if (has(/^-?order:/)) {
     wantsRandom = has(/^order:random$/);
   } else {
     const s = SORTS.find((x) => x.id === sort) || SORTS[0];
+   { id: 'scatter', label: 'Random (spread out)', tag: 'order:id_desc' },
     fixed.push(s.tag);
     wantsRandom = s.id === 'random';
   }
@@ -131,26 +134,65 @@ function normalize(p) {
     postUrl: `${BASE}/posts/${p.id}`,
   };
 }
+// Keeps only real, playable videos and converts them to the app's format
+function toVideoPosts(raw) {
+  return raw
+    .filter((p) => p.file && p.file.url
+      && ['webm', 'mp4'].includes(p.file.ext)
+      && !(p.flags && p.flags.deleted))
+    .map(normalize);
+}
 
+// "Spread out" random: jump to random points in the site's history, take the few
+// matching videos just below each point, then shuffle them all together.
+// To tune it, change the two numbers: DRAWS jumps, PER_DRAW videos from each jump.
+let newestId = 0;   // remembered for this session
+
+async function getNewestId(settings) {
+  if (newestId) return newestId;
+  const params = baseParams(settings);
+  params.set('limit', '1');
+  const data = await getJson(`${BASE}/posts.json?${params}`, settings.proxyUrl);
+  const raw = Array.isArray(data) ? data : (data.posts || []);
+  newestId = raw.length ? raw[0].id : 0;
+  return newestId;
+}
+
+async function scatterPage(search, settings) {
+  const DRAWS = 3, PER_DRAW = 10;
+  const top = await getNewestId(settings);
+  if (!top) throw new ApiError('http', 'Could not work out where the site\'s newest post is');
+  const byId = new Map();
+  for (let d = 0; d < DRAWS; d++) {
+    const before = 1 + Math.floor(Math.random() * top);
+    const params = baseParams(settings);
+    params.set('tags', buildQuery({ ...search, idBefore: before }));
+    params.set('limit', String(PER_DRAW));
+    const data = await getJson(`${BASE}/posts.json?${params}`, settings.proxyUrl);
+    const raw = Array.isArray(data) ? data : (data.posts || []);
+    toVideoPosts(raw).forEach((p) => byId.set(p.id, p));
+  }
+  const posts = [...byId.values()];
+  for (let i = posts.length - 1; i > 0; i--) {          // shuffle
+    const j = Math.floor(Math.random() * (i + 1));
+    [posts[i], posts[j]] = [posts[j], posts[i]];
+  }
+  return { posts, hasMore: true };   // there is always another random jump to make
+}
 export default {
   id: 'e621',
   name: 'e621',
   sorts: SORTS,
 
   async fetchPage({ search, page, settings }) {
+    if (search.sort === 'scatter') return scatterPage(search, settings);
     const params = baseParams(settings);
     params.set('tags', buildQuery(search));
     params.set('limit', String(settings.pageSize));
     params.set('page', String(page));
     const data = await getJson(`${BASE}/posts.json?${params}`, settings.proxyUrl);
-
     const raw = Array.isArray(data) ? data : (data.posts || []);
-    const posts = raw
-      .filter((p) => p.file && p.file.url                       // url is empty for hidden posts
-        && ['webm', 'mp4'].includes(p.file.ext)                 // double-check: videos only
-        && !(p.flags && p.flags.deleted))
-      .map(normalize);
-    return { posts, hasMore: raw.length >= settings.pageSize };
+    return { posts: toVideoPosts(raw), hasMore: raw.length >= settings.pageSize };
   },
 
   // Look up real tag names (used by the credits-tag finder in Settings)
