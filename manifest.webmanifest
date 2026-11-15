@@ -1,6 +1,6 @@
 {
-  "name": "BooruSwipe",
-  "short_name": "BooruSwipe",
+  "name": "Netflix",
+  "short_name": "Netflix",
   "description": "Personal swipe feed for booru videos",
   "start_url": "./",
   "scope": "./",
