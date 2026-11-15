@@ -58,7 +58,6 @@ function startSearch() {
   state.exhausted = false;
   state.loading = false;
   state.blockedUntil = 0;
-  minScore: settings.minScore },
   feed.clear();
   updateQueryLabel();
   showStatus('Loading videos…', { spinner: true });
