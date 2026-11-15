@@ -18,9 +18,13 @@ export const DEFAULT_SETTINGS = {
   volume: 1,
   muted: false,
   dataSaver: false,
+  discover: false,        // mix in videos similar to your favorites
+  discoverPercent: 20,    // roughly what % of the feed is discovery
   username: '',
   apiKey: '',
   syncFavorites: false,
   proxyUrl: '',
   pageSize: 30,         // posts fetched per request (the site allows up to 320)
 };
+// Tags too common to say anything about your taste. Edit this list freely.
+export const DISCOVER_IGNORE_TAGS = ['solo', 'duo', 'group', 'male', 'female', 'anthro', 'feral', 'human', 'mammal'];
