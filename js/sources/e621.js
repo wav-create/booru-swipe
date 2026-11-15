@@ -14,6 +14,7 @@ const NOT_REALLY_ARTISTS = new Set([
 
 const SORTS = [
   { id: 'random', label: 'Random',          tag: 'order:random' },
+  { id: 'scatter', label: 'Random (spread out)', tag: 'order:id_desc' },
   { id: 'new',    label: 'Newest',          tag: 'order:id_desc' },
   { id: 'score',  label: 'Highest score',   tag: 'order:score' },
   { id: 'favs',   label: 'Most favorited',  tag: 'order:favcount' },
@@ -71,7 +72,7 @@ function buildQuery({ tags, blacklist, ratings, sort, seed, minScore, idBefore }
     wantsRandom = has(/^order:random$/);
   } else {
     const s = SORTS.find((x) => x.id === sort) || SORTS[0];
-   { id: 'scatter', label: 'Random (spread out)', tag: 'order:id_desc' },
+
     fixed.push(s.tag);
     wantsRandom = s.id === 'random';
   }
