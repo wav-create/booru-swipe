@@ -96,12 +96,22 @@ function buildQuery({ tags, blacklist, ratings, sort, seed, minScore, idBefore }
   return [...user, ...fixed, ...negs].join(' ');
 }
 
-// Finds a smaller video version, if the post has one.
-// NOTE: this field is not on the written API page, so we look defensively
-// and simply return null (= use the full file) if it isn't there.
+// e621 now sends post data in a NEW layout. This code understands both:
+//   OLD: p.file.url, p.score.total, p.tags = { artist: [...], general: [...] }
+//   NEW: p.files.original.url, p.stats.score.total, p.tags = [ "tag", "tag", ... ]
+function fileInfo(p) {
+  if (p.files && p.files.original) {
+    return { url: p.files.original.url, ext: p.files.meta && p.files.meta.ext };
+  }
+  if (p.file) return { url: p.file.url, ext: p.file.ext };
+  return { url: null, ext: null };
+}
+
+// Finds a smaller video version, if the post has one (used by Data saver).
 function findSaverUrl(p) {
   try {
-    const alt = p.sample && p.sample.alternates;
+    const alt = (p.files && p.files.video && p.files.video.samples)   // new layout
+      || (p.sample && p.sample.alternates);                           // old layout
     if (!alt) return null;
     const group = alt.samples || alt;
     for (const key of ['480p', '720p']) {
@@ -112,6 +122,46 @@ function findSaverUrl(p) {
     }
   } catch { /* ignore */ }
   return null;
+}
+
+// Convert the site's JSON into the simple shape the app uses
+function normalize(p) {
+  const f = fileInfo(p);
+  const flat = Array.isArray(p.tags);               // new layout: one flat list, no categories
+  const t = flat ? {} : (p.tags || {});
+  const g = (k) => (Array.isArray(t[k]) ? t[k] : []);
+  const artists = g('artist').filter((a) => !NOT_REALLY_ARTISTS.has(a));
+  // The new layout doesn't say which tags are artists, so show the uploader instead
+  if (flat && p.uploader_name) artists.push('uploaded by ' + p.uploader_name);
+  const poster = (p.files && ((p.files.sample && p.files.sample.jpg) || (p.files.preview && p.files.preview.jpg)))
+    || (p.sample && p.sample.url) || (p.preview && p.preview.url) || '';
+  return {
+    source: 'e621',
+    id: p.id,
+    url: f.url,
+    saverUrl: findSaverUrl(p),
+    posterUrl: poster,
+    ext: f.ext,
+    score: p.stats && p.stats.score ? p.stats.score.total : (p.score ? p.score.total : 0),
+    favCount: p.stats ? p.stats.fav_count : (p.fav_count || 0),
+    rating: p.rating || '?',
+    artists,
+    tagGroups: flat ? { general: p.tags } : {
+      artist: g('artist'), copyright: g('copyright'), character: g('character'),
+      species: g('species'), general: g('general'), lore: g('lore'), meta: g('meta'),
+    },
+    postUrl: `${BASE}/posts/${p.id}`,
+  };
+}
+
+// Keeps only real, playable videos and converts them to the app's format
+function toVideoPosts(raw) {
+  return raw
+    .filter((p) => {
+      const f = fileInfo(p);
+      return f.url && ['webm', 'mp4'].includes(f.ext) && !(p.flags && p.flags.deleted);
+    })
+    .map(normalize);
 }
 
 // Convert the site's JSON into the simple shape the app uses
