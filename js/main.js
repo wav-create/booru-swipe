@@ -8,7 +8,6 @@ import { SOURCES } from './sources/index.js';
 import { Feed } from './feed.js';
 import { $, esc, parseList, parseBlacklist, matchesBlacklist, formatTime } from './util.js';
 import { DISCOVER_IGNORE_TAGS } from './config.js';
-
 const src = () => SOURCES[settings.source] || SOURCES.e621;
 
 // ---------------------------------------------------------------- state
@@ -35,7 +34,7 @@ function onCurrentChange(post) {
   $('info-artist').textContent = post.artists && post.artists.length
     ? post.artists.slice(0, 2).join(', ') : 'unknown artist';
   const site = (SOURCES[post.source] || {}).name || post.source;
-   $('info-meta').textContent = `▲ ${post.score ?? 0} · ${String(post.rating).toUpperCase()} · ${site}`
+  $('info-meta').textContent = `▲ ${post.score ?? 0} · ${String(post.rating).toUpperCase()} · ${site}`
     + (post.discovered ? ` · ✨ ${post.discoveredVia}` : '');
   $('btn-open').href = post.postUrl;
   updateFavButton(post);
@@ -107,6 +106,94 @@ function acceptable(p, blacklist) {
   return !state.seen.has(postKey(p)) && !matchesBlacklist(p, blacklist)
     && (p.score ?? 0) >= (settings.minScore || 0)
     && !(settings.rememberSeen && hasSeen(p));   // remove this line if you skipped the "never show watched" change
+}
+
+async function fetchDiscovery(want, user, blacklist, gen) {
+  const out = [];
+  for (let attempt = 0; attempt < 2 && out.length < want; attempt++) {
+    const tags = pickTaste(2);          // 1 = broader results, 3 = narrower
+    if (tags.length < 2) break;         // not enough favorites loaded to learn from yet
+    try {
+      const posts = await src().fetchDiscover({
+        tags, excludeUser: user, limit: Math.min(40, want * 3 + 5), settings,
+        search: { blacklist: settings.blacklist, ratings: settings.ratings, minScore: settings.minScore },
+      });
+      if (gen !== state.gen) return [];
+      for (const p of posts) {
+        if (out.length >= want) break;
+        if (!acceptable(p, blacklist)) continue;
+        p.discovered = true;
+        p.discoveredVia = tags.join(' + ');
+        state.seen.add(postKey(p));
+        out.push(p);
+      }
+    } catch (e) { console.warn('Discovery failed:', e); break; }   // never break the normal feed
+  }
+  return out;
+}
+
+// Slots discovery videos in between your favorites
+async function addDiscovery(favs, blacklist, gen) {
+  const user = favUserFromQuery();
+  if (!settings.discover || !user || !src().fetchDiscover || !favs.length) return favs;
+  learnFrom(favs);
+  const pct = Math.min(60, Math.max(5, settings.discoverPercent || 25));
+  const want = Math.max(1, Math.round((favs.length * pct) / (100 - pct)));
+  const found = await fetchDiscovery(want, user, blacklist, gen);
+  const every = Math.max(1, Math.round((100 - pct) / pct));   // one discovery after every N favorites
+  const out = [];
+  let d = 0;
+  favs.forEach((p, i) => {
+    out.push(p);
+    if (d < found.length && (i + 1) % every === 0) out.push(found[d++]);
+  });
+  return out.concat(found.slice(d));
+}
+
+// ---------------------------------------------------------------- discovery ("more like my favorites")
+const profile = { counts: new Map(), n: 0 };   // how often each tag shows up in your favorites
+const IGNORE = new Set(DISCOVER_IGNORE_TAGS);
+
+function favUserFromQuery() {
+  const m = /(?:^|\s)fav:(\S+)/i.exec(settings.query || '');
+  return m ? m[1] : null;
+}
+
+function learnFrom(posts) {
+  for (const p of posts) {
+    profile.n++;
+    const counted = new Set();
+    for (const group of Object.values(p.tagGroups || {})) {
+      for (const t of group) {
+        if (IGNORE.has(t) || /^\d{4}$/.test(t) || counted.has(t)) continue;   // skip years like 2025
+        counted.add(t);
+        profile.counts.set(t, (profile.counts.get(t) || 0) + 1);
+      }
+    }
+  }
+}
+
+// Picks tags at random; tags that appear more in your favorites are picked more often.
+function pickTaste(howMany) {
+  const minCount = Math.max(2, Math.floor(profile.n * 0.08));   // must appear in ~8% of favorites
+  const pool = [...profile.counts].filter(([, c]) => c >= minCount);
+  const picked = [];
+  while (picked.length < howMany && pool.length) {
+    const total = pool.reduce((s, [, c]) => s + c, 0);
+    let r = Math.random() * total;
+    let idx = 0;
+    for (; idx < pool.length - 1; idx++) { r -= pool[idx][1]; if (r <= 0) break; }
+    picked.push(pool[idx][0]);
+    pool.splice(idx, 1);
+  }
+  return picked;
+}
+
+function acceptable(p, blacklist) {
+  return !state.seen.has(postKey(p)) && !matchesBlacklist(p, blacklist)
+    && (p.score ?? 0) >= (settings.minScore || 0)
+    // only applies if you added the "never show watched videos" feature; harmless otherwise
+    && !(settings.rememberSeen && typeof hasSeen === 'function' && hasSeen(p));
 }
 
 async function fetchDiscovery(want, user, blacklist, gen) {
