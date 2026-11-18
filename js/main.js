@@ -154,9 +154,7 @@ function learnFrom(posts) {
 
 function acceptable(p, blacklist) {
   return !state.seen.has(postKey(p)) && !matchesBlacklist(p, blacklist)
-    && (p.score ?? 0) >= (settings.minScore || 0)
-    // only applies if you added the "never show watched videos" feature; harmless otherwise
-    && !(settings.rememberSeen && typeof hasSeen === 'function' && hasSeen(p));
+    && (p.score ?? 0) >= (settings.minScore || 0);
 }
 
 async function fetchDiscovery(want, user, blacklist, gen) {
