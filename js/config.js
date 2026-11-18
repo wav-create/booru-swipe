@@ -25,6 +25,17 @@ export const DEFAULT_SETTINGS = {
   syncFavorites: false,
   proxyUrl: '',
   pageSize: 30,         // posts fetched per request (the site allows up to 320)
+  discover: false,        // mix in videos similar to your favorites
+  discoverPercent: 25,    // roughly what % of the feed is discovery
 };
 // Tags too common to say anything about your taste. Edit this list freely.
 export const DISCOVER_IGNORE_TAGS = ['solo', 'duo', 'group', 'male', 'female', 'anthro', 'feral', 'human', 'mammal'];
+// Tags too common to say anything about your taste. Edit this list freely.
+// Anything that shows up in nearly every video belongs here.
+export const DISCOVER_IGNORE_TAGS = [
+  'animated', 'video', 'sound', 'no_sound', 'sound_warning', 'loop', 'hi_res', 'absurd_res',
+  'high_framerate', 'short_playtime', 'long_playtime', '3d_animation', '2d_animation',
+  '3d_(artwork)', 'digital_media_(artwork)', 'conditional_dnp', 'unknown_artist',
+  'solo', 'duo', 'group', 'male', 'female', 'anthro', 'feral', 'human', 'mammal',
+  'clothed', 'clothing', 'ambiguous_gender',
+];
