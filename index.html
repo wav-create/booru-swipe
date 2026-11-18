@@ -129,7 +129,12 @@
       <option value="10">About 10%</option><option value="25">About 25%</option>
       <option value="33">About 33%</option><option value="50">About 50%</option>
     </select>
-
+     <label class="check"><input type="checkbox" id="set-discover"> Discovery: mix in similar videos I haven't favorited (needs a <code>fav:yourname</code> search)</label>
+    <label for="set-discover-pct">How much of the feed is discovery</label>
+    <select id="set-discover-pct">
+      <option value="10">About 10%</option><option value="25">About 25%</option>
+      <option value="33">About 33%</option><option value="50">About 50%</option>
+    </select>
     <h3>Credits / end-card rule</h3>
     <label class="check"><input type="checkbox" id="set-credits-on"> End videos early when they have one of these tags</label>
     <textarea id="set-credits" spellcheck="false" autocapitalize="off"></textarea>
