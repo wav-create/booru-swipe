@@ -164,38 +164,6 @@ function toVideoPosts(raw) {
     .map(normalize);
 }
 
-// Convert the site's JSON into the simple shape the app uses
-function normalize(p) {
-  const t = p.tags || {};
-  const g = (k) => (Array.isArray(t[k]) ? t[k] : []);
-  return {
-    source: 'e621',
-    id: p.id,
-    url: p.file.url,
-    saverUrl: findSaverUrl(p),
-    posterUrl: (p.sample && p.sample.url) || (p.preview && p.preview.url) || '',
-    ext: p.file.ext,
-    score: p.score ? p.score.total : 0,
-    favCount: p.fav_count || 0,
-    rating: p.rating || '?',
-    artists: g('artist').filter((a) => !NOT_REALLY_ARTISTS.has(a)),
-    tagGroups: {
-      artist: g('artist'), copyright: g('copyright'), character: g('character'),
-      species: g('species'), general: g('general'), lore: g('lore'), meta: g('meta'),
-    },
-    postUrl: `${BASE}/posts/${p.id}`,
-  };
-}
-
-// Keeps only real, playable videos and converts them to the app's format
-function toVideoPosts(raw) {
-  return raw
-    .filter((p) => p.file && p.file.url
-      && ['webm', 'mp4'].includes(p.file.ext)
-      && !(p.flags && p.flags.deleted))
-    .map(normalize);
-}
-
 // "Spread out" random: jump to random points in the site's history, take the few
 // matching videos just below each point, then shuffle them all together.
 // To tune it, change the two numbers: DRAWS jumps, PER_DRAW videos from each jump.
@@ -258,23 +226,7 @@ export default {
     const data = await getJson(`${BASE}/tags.json?${params}`, settings.proxyUrl);
     return (Array.isArray(data) ? data : []).map((t) => ({ name: t.name, count: t.post_count }));
   },
-  // "Discovery": videos with ALL of the given tags that are NOT in this user's favorites
-  async fetchDiscover({ tags, excludeUser, search, limit, settings }) {
-    const params = baseParams(settings);
-    params.set('tags', buildQuery({
-      ...search,
-      tags: `${tags.join(' ')} -fav:${excludeUser}`,
-      sort: 'random',
-      seed: Math.floor(Math.random() * 1e9),
-    }));
-    params.set('limit', String(limit));
-    params.set('page', '1');
-    const data = await getJson(`${BASE}/posts.json?${params}`, settings.proxyUrl);
-    const raw = Array.isArray(data) ? data : (data.posts || []);
-    return raw
-      .filter((p) => p.file && p.file.url && ['webm', 'mp4'].includes(p.file.ext) && !(p.flags && p.flags.deleted))
-      .map(normalize);
-  },
+
   // Optional: add to your site account's favorites
   async favorite(post, settings) {
     if (!settings.username || !settings.apiKey) return;
