@@ -66,25 +66,7 @@ function startSearch() {
   loadMore();
 }
 
-// ---------------------------------------------------------------- discovery ("more like my favorites")
-const profile = { counts: new Map(), n: 0 };   // how often each tag shows up in your favorites
-const IGNORE = new Set(DISCOVER_IGNORE_TAGS);
 
-function favUserFromQuery() {
-  const m = /(?:^|\s)fav:(\S+)/i.exec(settings.query || '');
-  return m ? m[1] : null;
-}
-
-function learnFrom(posts) {
-  for (const p of posts) {
-    profile.n++;
-    for (const group of ['artist', 'copyright', 'character', 'species', 'general']) {
-      for (const t of (p.tagGroups && p.tagGroups[group]) || []) {
-        if (!IGNORE.has(t)) profile.counts.set(t, (profile.counts.get(t) || 0) + 1);
-      }
-    }
-  }
-}
 
 // Picks tags at random; tags that appear more in your favorites are picked more often.
 function pickTaste(howMany) {
@@ -102,11 +84,7 @@ function pickTaste(howMany) {
   return picked;
 }
 
-function acceptable(p, blacklist) {
-  return !state.seen.has(postKey(p)) && !matchesBlacklist(p, blacklist)
-    && (p.score ?? 0) >= (settings.minScore || 0)
-    && !(settings.rememberSeen && hasSeen(p));   // remove this line if you skipped the "never show watched" change
-}
+
 
 async function fetchDiscovery(want, user, blacklist, gen) {
   const out = [];
