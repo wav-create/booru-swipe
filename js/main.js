@@ -151,21 +151,6 @@ function learnFrom(posts) {
   }
 }
 
-// Picks tags at random; tags that appear more in your favorites are picked more often.
-function pickTaste(howMany) {
-  const minCount = Math.max(2, Math.floor(profile.n * 0.08));   // must appear in ~8% of favorites
-  const pool = [...profile.counts].filter(([, c]) => c >= minCount);
-  const picked = [];
-  while (picked.length < howMany && pool.length) {
-    const total = pool.reduce((s, [, c]) => s + c, 0);
-    let r = Math.random() * total;
-    let idx = 0;
-    for (; idx < pool.length - 1; idx++) { r -= pool[idx][1]; if (r <= 0) break; }
-    picked.push(pool[idx][0]);
-    pool.splice(idx, 1);
-  }
-  return picked;
-}
 
 function acceptable(p, blacklist) {
   return !state.seen.has(postKey(p)) && !matchesBlacklist(p, blacklist)
